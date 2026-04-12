@@ -1,11 +1,10 @@
 # Stripe Payment Integration Setup
 
-## ✅ Current Status: FULLY IMPLEMENTED
-Stripe payment integration is now complete and working! The checkout process includes:
-- Secure card input using Stripe Elements
-- Payment intent creation and confirmation
-- Automatic booking creation after successful payment
-- Error handling and user feedback
+## ✅ Current Status: API-ONLY IMPLEMENTATION
+Payment integration has been moved to backend APIs only. The checkout process now uses:
+- Stripe Checkout (hosted payment page)
+- Backend API calls for payment processing
+- No client-side payment forms or keys
 
 ## Configuration Required
 

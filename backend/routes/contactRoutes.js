@@ -1,11 +1,15 @@
 const express = require('express');
-const { submitContact, getAllContacts, updateContactStatus } = require('../controllers/contactController');
-const authMiddleware = require('../middleware/authMiddleware');
+const {
+  submitContact,
+  getAllContacts,
+  updateContactStatus,
+} = require('../controllers/contactController');
+const { authMiddleware, adminMiddleware } = require('../middleware/authMiddleware');
 
 const router = express.Router();
 
-router.post('/', submitContact);
-router.get('/', authMiddleware, getAllContacts);
-router.put('/:id/status', authMiddleware, updateContactStatus);
+router.post('/', submitContact); // Public - submit contact form
+router.get('/', adminMiddleware, getAllContacts); // Admin only - view all contacts
+router.put('/:id/status', adminMiddleware, updateContactStatus); // Admin only - update status
 
 module.exports = router;

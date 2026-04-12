@@ -1,90 +1,124 @@
 const express = require('express');
 const cors = require('cors');
-const multer = require('multer');
 const path = require('path');
-const { connectDB } = require('./config/db');
+const { connectDB, closeDB } = require('./config/db');
 require('dotenv').config();
 
 const app = express();
 
-// Configure multer for file uploads
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, 'uploads/');
-  },
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
-  }
-});
-
-const upload = multer({
-  storage: storage,
-  limits: {
-    fileSize: 5 * 1024 * 1024, // 5MB limit
-  },
-  fileFilter: (req, file, cb) => {
-    const allowedTypes = /jpeg|jpg|png|gif/;
-    const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
-    const mimetype = allowedTypes.test(file.mimetype);
-
-    if (mimetype && extname) {
-      return cb(null, true);
-    } else {
-      cb(new Error('Only image files are allowed!'));
-    }
-  }
-});
-
 // Middleware
 const allowedOrigins = [
   process.env.CLIENT_URL || 'http://localhost:3000',
-  process.env.ADMIN_URL || 'http://localhost:3001'
+  process.env.ADMIN_URL || 'http://localhost:3001',
 ];
-app.use(cors({
-  origin: (origin, callback) => {
-    if (!origin || allowedOrigins.includes(origin)) {
-      return callback(null, true);
-    }
-    return callback(new Error('CORS policy violation: Origin not allowed'));
-  }
-}));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+      return callback(new Error('CORS policy violation: Origin not allowed'));
+    },
+    credentials: true,
+  })
+);
+
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Serve uploaded files statically
 app.use('/uploads', express.static('uploads'));
 
-// Connect to Database
-connectDB();
-
-// Routes
-app.use('/api/auth', require('./routes/authRoutes'));
-app.use('/api/vehicles', require('./routes/vehicleRoutes'));
-app.use('/api/bookings', require('./routes/bookingRoutes'));
-app.use('/api/users', require('./routes/userRoutes'));
-app.use('/api/contact', require('./routes/contactRoutes'));
-
-// Health Check
+// Health check endpoint
 app.get('/api/health', (req, res) => {
-  res.json({ message: 'Server is running' });
-});
-
-// Error handling middleware
-app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(err.status || 500).json({
-    success: false,
-    message: err.message || 'Internal Server Error',
+  res.json({
+    success: true,
+    message: 'Server is running',
+    timestamp: new Date().toISOString(),
   });
 });
 
-// 404 handler
-app.use((req, res) => {
-  res.status(404).json({ success: false, message: 'Route not found' });
-});
+// Connect to Database
+const startServer = async () => {
+  try {
+    await connectDB();
+    console.log('✓ Database connected');
 
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+    // Routes
+    app.use('/api/auth', require('./routes/authRoutes'));
+    app.use('/api/vehicles', require('./routes/vehicleRoutes'));
+    app.use('/api/bookings', require('./routes/bookingRoutes'));
+    app.use('/api/users', require('./routes/userRoutes'));
+    app.use('/api/contact', require('./routes/contactRoutes'));
+
+    // 404 handler
+    app.use((req, res) => {
+      res.status(404).json({
+        success: false,
+        message: 'Route not found',
+      });
+    });
+
+    // Global error handling middleware
+    app.use((err, req, res, next) => {
+      console.error('✗ Error:', err.message);
+
+      // Multer errors
+      if (err.code === 'LIMIT_FILE_SIZE') {
+        return res.status(400).json({
+          success: false,
+          message: 'File size exceeds limit (5MB max)',
+        });
+      }
+
+      if (err.message === 'Only image files (JPEG, JPG, PNG, GIF) are allowed!') {
+        return res.status(400).json({
+          success: false,
+          message: err.message,
+        });
+      }
+
+      // JWT errors
+      if (err.name === 'JsonWebTokenError') {
+        return res.status(401).json({
+          success: false,
+          message: 'Invalid token',
+        });
+      }
+
+      // Generic error
+      res.status(err.status || 500).json({
+        success: false,
+        message: err.message || 'Internal Server Error',
+      });
+    });
+
+    const PORT = process.env.PORT || 5000;
+    const server = app.listen(PORT, () => {
+      console.log(`✓ Server running on port ${PORT}`);
+    });
+
+    // Graceful shutdown
+    process.on('SIGTERM', async () => {
+      console.log('SIGTERM received, shutting down gracefully...');
+      server.close(async () => {
+        await closeDB();
+        process.exit(0);
+      });
+    });
+
+    process.on('SIGINT', async () => {
+      console.log('SIGINT received, shutting down gracefully...');
+      server.close(async () => {
+        await closeDB();
+        process.exit(0);
+      });
+    });
+  } catch (error) {
+    console.error('✗ Failed to start server:', error.message);
+    process.exit(1);
+  }
+};
+
+startServer();
