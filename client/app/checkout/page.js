@@ -5,14 +5,23 @@ import Link from 'next/link'
 import Navbar from '../components/Navbar'
 import Footer from '../components/Footer'
 import { useCart } from '../context/CartContext'
+import { authService } from '../lib/apiService'
 
 const Checkout = () => {
   const { cartItems, getCartTotal, clearCart } = useCart()
   const router = useRouter()
   const [isProcessing, setIsProcessing] = useState(false)
   const [error, setError] = useState('')
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
 
   useEffect(() => {
+    const token = authService.getToken()
+    const userData = authService.getUser()
+    setIsAuthenticated(!!token)
+    if (!token) {
+      router.push('/login')
+      return
+    }
     if (cartItems.length === 0) {
       router.push('/cart')
     }
@@ -23,9 +32,31 @@ const Checkout = () => {
   const tax = Math.round(subtotal * 0.1)
   const finalTotal = subtotal + tax
 
+  const validateCartItems = () => {
+    for (const item of cartItems) {
+      if (!item.startDate || !item.endDate) {
+        return 'Please set start and end dates for all items.'
+      }
+      if (new Date(item.startDate) >= new Date(item.endDate)) {
+        return 'End date must be after start date for all items.'
+      }
+      if (new Date(item.startDate) < new Date()) {
+        return 'Start date cannot be in the past.'
+      }
+    }
+    return null
+  }
+
   const handleCheckout = async () => {
     setIsProcessing(true)
     setError('')
+
+    const validationError = validateCartItems()
+    if (validationError) {
+      setError(validationError)
+      setIsProcessing(false)
+      return
+    }
 
     const validOrigin = typeof window !== 'undefined' && (window.location.protocol === 'http:' || window.location.protocol === 'https:')
       ? window.location.origin
@@ -37,14 +68,20 @@ const Checkout = () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${authService.getToken()}`,
         },
         body: JSON.stringify({
           cartItems: cartItems.map(item => ({
             vehicleId: item.id || item._id,
             quantity: item.quantity,
             rentalDays: item.rentalDays,
+            startDate: item.startDate,
+            endDate: item.endDate,
+            pickupLocation: item.pickupLocation,
+            dropoffLocation: item.dropoffLocation,
+            notes: item.notes,
           })),
-          successUrl: `${validOrigin}/success`,
+          successUrl: `${validOrigin}/success?session_id={CHECKOUT_SESSION_ID}`,
           cancelUrl: `${validOrigin}/cart`,
         }),
       })
@@ -62,6 +99,18 @@ const Checkout = () => {
       setError('Network error. Please try again.')
       setIsProcessing(false)
     }
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <>
+        <Navbar />
+        <div className='flex items-center justify-center min-h-screen'>
+          <p>Redirecting to login...</p>
+        </div>
+        <Footer />
+      </>
+    )
   }
 
   if (cartItems.length === 0) {
@@ -94,13 +143,12 @@ const Checkout = () => {
 
               <div className='space-y-4 mb-6'>
                 {cartItems.map((item, index) => {
-                  const pricePerDay = parseInt(item.price.replace('$', '').replace('/day', ''))
-                  const itemTotal = pricePerDay * item.rentalDays * item.quantity
+                  const itemTotal = item.pricePerDay * item.rentalDays * item.quantity
 
                   return (
                     <div key={item.id || item._id || index} className='flex items-center gap-4 pb-4 border-b border-gray-200 last:border-b-0'>
                       <img
-                        src={`http://localhost:5000${item.image}`}
+                        src={`${process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:5000'}${item.image}`}
                         alt={item.name}
                         className='w-16 h-16 object-cover rounded-lg'
                       />
@@ -108,6 +156,15 @@ const Checkout = () => {
                         <h3 className='font-semibold text-gray-900'>{item.name}</h3>
                         <p className='text-sm text-gray-600'>{item.category}</p>
                         <p className='text-sm text-gray-600'>Qty: {item.quantity} × {item.rentalDays} days</p>
+                        <p className='text-sm text-gray-600'>From: {new Date(item.startDate).toLocaleDateString()} To: {new Date(item.endDate).toLocaleDateString()}</p>
+                        {(item.pickupLocation || item.dropoffLocation) && (
+                          <p className='text-sm text-gray-600'>
+                            {item.pickupLocation && `Pickup: ${item.pickupLocation}`}
+                            {item.pickupLocation && item.dropoffLocation && ' | '}
+                            {item.dropoffLocation && `Dropoff: ${item.dropoffLocation}`}
+                          </p>
+                        )}
+                        {item.notes && <p className='text-sm text-gray-600'>Notes: {item.notes}</p>}
                       </div>
                       <div className='text-right'>
                         <p className='font-bold text-orange-500'>${itemTotal}</p>

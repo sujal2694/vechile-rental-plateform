@@ -40,9 +40,15 @@ const Vehicles = () => {
     setLoading(true)
     try {
       const res = await vehicleService.getAllVehicles()
-      setVehicles(res.data || [])
+      if (res.success) {
+        setVehicles(res.data || [])
+      } else {
+        console.error('Error fetching vehicles:', res.message)
+        setVehicles([])
+      }
     } catch (error) {
       console.error('Error fetching vehicles:', error)
+      setVehicles([])
     } finally {
       setLoading(false)
     }

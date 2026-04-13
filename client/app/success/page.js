@@ -5,6 +5,7 @@ import Link from 'next/link'
 import Navbar from '../components/Navbar'
 import Footer from '../components/Footer'
 import { useCart } from '../context/CartContext'
+import { authService } from '../lib/apiService'
 
 const Success = () => {
   const router = useRouter()
@@ -12,28 +13,50 @@ const Success = () => {
   const { clearCart } = useCart()
   const [bookingDetails, setBookingDetails] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
 
   useEffect(() => {
     const sessionId = searchParams.get('session_id')
 
-    if (sessionId) {
-      // Verify the payment and create bookings
-      fetch(`http://localhost:5000/api/bookings/verify-checkout/${sessionId}`)
-        .then(res => res.json())
-        .then(data => {
-          if (data.success) {
-            setBookingDetails(data.bookings)
-            clearCart() // Clear the cart after successful payment
-          }
-          setLoading(false)
-        })
-        .catch(err => {
-          console.error('Error verifying checkout:', err)
-          setLoading(false)
-        })
-    } else {
+    if (!sessionId) {
+      console.error('❌ No session_id in URL')
+      setError('Invalid payment session. Please contact support.')
       setLoading(false)
+      return
     }
+
+    console.log('📋 Verifying session:', sessionId)
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api'
+
+    // Verify the payment and create bookings
+    fetch(`${apiUrl}/bookings/verify-checkout/${sessionId}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${authService.getToken()}`,
+      }
+    })
+      .then(res => {
+        console.log(`📤 Response status: ${res.status}`)
+        return res.json()
+      })
+      .then(data => {
+        console.log('📦 Response data:', data)
+        if (data.success) {
+          console.log('✅ Payment verified, bookings created:', data.bookings?.length || 0)
+          setBookingDetails(data.bookings)
+          clearCart() // Clear the cart after successful payment
+        } else {
+          console.error('❌ Verification failed:', data.message)
+          setError(data.message || 'Payment verification failed.')
+        }
+        setLoading(false)
+      })
+      .catch(err => {
+        console.error('❌ Network error:', err)
+        setError(`Failed to verify payment: ${err.message}`)
+        setLoading(false)
+      })
   }, [searchParams, clearCart])
 
   if (loading) {
@@ -44,6 +67,31 @@ const Success = () => {
           <div className='text-center'>
             <i className='bx bx-loader-alt bx-spin text-4xl text-orange-500 mb-4'></i>
             <p className='text-gray-600'>Verifying your payment...</p>
+          </div>
+        </div>
+        <Footer />
+      </>
+    )
+  }
+
+  if (error) {
+    return (
+      <>
+        <Navbar />
+        <div className='min-h-screen bg-gray-50 py-8 md:py-12 px-4'>
+          <div className='max-w-2xl mx-auto'>
+            <div className='bg-white rounded-lg shadow-md p-8 text-center'>
+              <div className='mb-6'>
+                <i className='bx bx-error text-6xl text-red-500'></i>
+              </div>
+              <h1 className='text-3xl font-bold text-gray-900 mb-2'>Payment Error</h1>
+              <p className='text-gray-600 mb-6'>{error}</p>
+              <Link href='/cart'>
+                <button className='w-full bg-orange-500 hover:bg-orange-600 text-white font-semibold py-3 rounded-lg transition-colors duration-200'>
+                  Back to Cart
+                </button>
+              </Link>
+            </div>
           </div>
         </div>
         <Footer />
@@ -74,6 +122,9 @@ const Success = () => {
                       <div className='flex justify-between items-start'>
                         <div>
                           <h3 className='font-semibold text-gray-900'>{booking.vehicleName}</h3>
+                          <p className='text-sm text-gray-600'>
+                            {new Date(booking.startDate).toLocaleDateString()} - {new Date(booking.endDate).toLocaleDateString()}
+                          </p>
                           <p className='text-sm text-gray-600'>
                             {booking.rentalDays} days × ${Math.round(booking.totalCost / booking.rentalDays)}/day
                           </p>

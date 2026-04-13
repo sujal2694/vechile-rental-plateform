@@ -19,8 +19,7 @@ const Register = () => {
 
   useEffect(() => {
     // Check if already logged in
-    const token = localStorage.getItem('token');
-    if (token) {
+    if (authService.getToken()) {
       router.push('/');
     }
   }, [router]);
@@ -28,8 +27,31 @@ const Register = () => {
   const handleChange = (e) => {
     setFormData({
       ...formData,
-      [e.target.name]: e.target.value
+      [e.target.name]: e.target.value.trim()
     });
+  };
+
+  const validateForm = () => {
+    if (!formData.fullName || formData.fullName.length < 2) {
+      return 'Full name must be at least 2 characters long';
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(formData.email)) {
+      return 'Please enter a valid email address';
+    }
+    if (formData.password.length < 6) {
+      return 'Password must be at least 6 characters long';
+    }
+    if (!/\d/.test(formData.password)) {
+      return 'Password must contain at least one number';
+    }
+    if (!/[A-Z]/.test(formData.password)) {
+      return 'Password must contain at least one uppercase letter';
+    }
+    if (formData.password !== formData.confirmPassword) {
+      return 'Passwords do not match';
+    }
+    return null;
   };
 
   const handleSubmit = async (e) => {
@@ -37,16 +59,9 @@ const Register = () => {
     setLoading(true);
     setError('');
 
-    // Validate passwords match
-    if (formData.password !== formData.confirmPassword) {
-      setError('Passwords do not match');
-      setLoading(false);
-      return;
-    }
-
-    // Validate password length
-    if (formData.password.length < 6) {
-      setError('Password must be at least 6 characters long');
+    const validationError = validateForm();
+    if (validationError) {
+      setError(validationError);
       setLoading(false);
       return;
     }
@@ -134,6 +149,9 @@ const Register = () => {
                 placeholder='Enter your password'
                 required
               />
+              <div className='mt-1 text-xs text-gray-500'>
+                Password must be at least 6 characters, contain a number and an uppercase letter.
+              </div>
             </div>
 
             <div className='mb-6'>

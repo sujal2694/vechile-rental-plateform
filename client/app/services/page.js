@@ -1,5 +1,5 @@
 "use client";
-import React from 'react'
+import Link from 'next/link'
 import Navbar from '../components/Navbar'
 import Footer from '../components/Footer'
 
@@ -85,9 +85,11 @@ const Services = () => {
                   ))}
                 </ul>
 
-                <button className='w-full bg-orange-500 hover:bg-orange-600 text-white font-semibold py-2 rounded-lg transition-colors duration-200'>
-                  Learn More
-                </button>
+                <Link href='/contact'>
+                  <button className='w-full bg-orange-500 hover:bg-orange-600 text-white font-semibold py-2 rounded-lg transition-colors duration-200'>
+                    Learn More
+                  </button>
+                </Link>
               </div>
             ))}
           </div>
@@ -100,9 +102,11 @@ const Services = () => {
             <p className='text-lg text-gray-600 mb-8'>
               Choose the perfect service for your needs and book now for the best rates and service quality.
             </p>
-            <button className='bg-orange-500 hover:bg-orange-600 text-white font-semibold px-8 py-3 rounded-lg transition-colors duration-200 shadow-lg'>
-              Book a Service
-            </button>
+            <Link href='/vehicles'>
+              <button className='bg-orange-500 hover:bg-orange-600 text-white font-semibold px-8 py-3 rounded-lg transition-colors duration-200 shadow-lg'>
+                Book a Service
+              </button>
+            </Link>
           </div>
         </div>
       </div>

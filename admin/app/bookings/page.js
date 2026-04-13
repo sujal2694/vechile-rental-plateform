@@ -9,6 +9,7 @@ const Bookings = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [bookings, setBookings] = useState([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
   const [filteredBookings, setFilteredBookings] = useState([])
   const [statusFilter, setStatusFilter] = useState('all')
 
@@ -28,12 +29,18 @@ const Bookings = () => {
 
   const fetchBookings = async () => {
     setLoading(true)
+    setError('')
     try {
       const res = await bookingService.getAllBookings()
-      setBookings(res.data || [])
-      filterBookings(res.data || [], 'all')
+      if (res.success) {
+        setBookings(res.data || [])
+        filterBookings(res.data || [], 'all')
+      } else {
+        setError(res.message || 'Failed to fetch bookings')
+      }
     } catch (error) {
       console.error('Error fetching bookings:', error)
+      setError('Error loading bookings. Please try again.')
     } finally {
       setLoading(false)
     }
@@ -49,9 +56,16 @@ const Bookings = () => {
   }
 
   const handleStatusChange = async (bookingId, newStatus) => {
-    const res = await bookingService.updateBookingStatus(bookingId, newStatus)
-    if (res.success) {
-      fetchBookings()
+    try {
+      const res = await bookingService.updateBookingStatus(bookingId, newStatus)
+      if (res.success) {
+        fetchBookings()
+      } else {
+        setError('Failed to update booking status')
+      }
+    } catch (error) {
+      console.error('Error updating status:', error)
+      setError('Error updating booking status')
     }
   }
 
@@ -77,6 +91,18 @@ const Bookings = () => {
 
         {/* Content */}
         <div className='p-6 md:p-8'>
+          {error && (
+            <div className='mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700'>
+              {error}
+              <button
+                onClick={fetchBookings}
+                className='ml-4 px-3 py-1 bg-red-500 text-white rounded hover:bg-red-600'
+              >
+                Retry
+              </button>
+            </div>
+          )}
+
           {/* Filter Tabs */}
           <div className='mb-6 flex flex-wrap gap-2 bg-white rounded-lg p-3 shadow-sm'>
             {['all', 'pending', 'confirmed', 'completed', 'cancelled'].map((status) => (

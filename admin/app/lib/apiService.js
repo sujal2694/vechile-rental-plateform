@@ -129,10 +129,13 @@ export const vehicleService = {
     try {
       const response = await fetch(`${API_BASE_URL}/vehicles`)
       const data = await response.json()
+      if (!response.ok) {
+        return { success: false, message: data.message || 'Failed to fetch vehicles', data: [] }
+      }
       return { success: true, data: data.vehicles || data }
     } catch (error) {
       console.error('Error fetching vehicles:', error)
-      return { success: false, data: [] }
+      return { success: false, message: 'An error occurred', data: [] }
     }
   },
 
@@ -210,23 +213,26 @@ export const bookingService = {
   getAllBookings: async () => {
     try {
       const token = localStorage.getItem('adminToken')
-      const response = await fetch(`${API_BASE_URL}/bookings`, {
+      const response = await fetch(`${API_BASE_URL}/bookings/all`, {
         headers: {
           'Authorization': `Bearer ${token}`,
         },
       })
       const data = await response.json()
+      if (!response.ok) {
+        return { success: false, message: data.message || 'Failed to fetch bookings', data: [] }
+      }
       return { success: true, data: data.bookings || data }
     } catch (error) {
       console.error('Error fetching bookings:', error)
-      return { success: false, data: [] }
+      return { success: false, message: 'An error occurred', data: [] }
     }
   },
 
   updateBookingStatus: async (bookingId, status) => {
     try {
       const token = localStorage.getItem('adminToken')
-      const response = await fetch(`${API_BASE_URL}/bookings/${bookingId}`, {
+      const response = await fetch(`${API_BASE_URL}/bookings/${bookingId}/status`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',

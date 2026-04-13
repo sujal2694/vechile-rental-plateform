@@ -108,7 +108,7 @@ const createBooking = async (req, res) => {
       pickupLocation: pickupLocation || '',
       dropoffLocation: dropoffLocation || '',
       pricePerDay: vehicle.pricePerDay,
-      totalCost: priceValidation.price,
+      totalCost: Math.round(priceValidation.price * 100) / 100, // Round to 2 decimals
       discount: 0,
       status: 'pending',
       paymentStatus: 'unpaid',
@@ -187,6 +187,28 @@ const getUserBookings = async (req, res) => {
   }
 };
 
+const getAllBookings = async (req, res) => {
+  try {
+    const db = getDB();
+    const bookings = await db
+      .collection('bookings')
+      .find({})
+      .sort({ createdAt: -1 })
+      .toArray();
+
+    res.json({
+      success: true,
+      bookings,
+    });
+  } catch (error) {
+    console.error('Get all bookings error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch all bookings',
+    });
+  }
+};
+
 /**
  * Get booking by ID
  */
@@ -233,10 +255,18 @@ const getBookingById = async (req, res) => {
 };
 
 /**
- * Update booking status (ADMIN ONLY typically)
+ * Update booking status (ADMIN ONLY)
  */
 const updateBookingStatus = async (req, res) => {
   try {
+    // Check if user is admin
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied. Admin privileges required.',
+      });
+    }
+
     const { id } = req.params;
     const { status } = req.body;
 
@@ -374,9 +404,17 @@ const cancelBooking = async (req, res) => {
 const createCheckoutSession = async (req, res) => {
   try {
     if (!stripe) {
+      console.error('Stripe not initialized. STRIPE_SECRET_KEY may be missing or invalid.');
       return res.status(503).json({
         success: false,
         message: 'Payment system not configured. Please contact support.',
+      });
+    }
+
+    if (!req.user || !req.user.userId) {
+      return res.status(401).json({
+        success: false,
+        message: 'Authentication required for checkout',
       });
     }
 
@@ -393,10 +431,26 @@ const createCheckoutSession = async (req, res) => {
     const lineItems = [];
 
     for (const item of cartItems) {
+      if (!item.vehicleId || !item.startDate || !item.endDate) {
+        return res.status(400).json({
+          success: false,
+          message: 'Each cart item must include vehicleId, startDate, and endDate',
+        });
+      }
+
       if (!ObjectId.isValid(item.vehicleId)) {
         return res.status(400).json({
           success: false,
           message: `Invalid vehicle ID: ${item.vehicleId}`,
+        });
+      }
+
+      // Validate dates
+      const dateValidation = validateBookingDates(item.startDate, item.endDate);
+      if (!dateValidation.valid) {
+        return res.status(400).json({
+          success: false,
+          message: `Invalid dates for vehicle ${item.vehicleId}: ${dateValidation.message}`,
         });
       }
 
@@ -411,7 +465,36 @@ const createCheckoutSession = async (req, res) => {
         });
       }
 
-      const unitAmount = Math.round(vehicle.pricePerDay * 100); // Convert to cents
+      // Validate vehicle price data
+      const pricePerDay = parseFloat(vehicle.pricePerDay);
+      if (!pricePerDay || isNaN(pricePerDay) || pricePerDay <= 0) {
+        return res.status(400).json({
+          success: false,
+          message: `Vehicle ${item.vehicleId} has invalid pricing data. Please contact support.`,
+        });
+      }
+
+      // Check for overlapping bookings
+      const overlappingBooking = await db.collection('bookings').findOne({
+        vehicleId: new ObjectId(item.vehicleId),
+        status: { $in: ['pending', 'confirmed'] },
+        $or: [
+          {
+            startDate: { $lt: new Date(item.endDate) },
+            endDate: { $gt: new Date(item.startDate) },
+          },
+        ],
+      });
+
+      if (overlappingBooking) {
+        return res.status(409).json({
+          success: false,
+          message: `Vehicle ${item.vehicleId} is not available for the selected dates.`,
+        });
+      }
+
+      const rentalDays = dateValidation.rentalDays;
+      const unitAmount = Math.round(pricePerDay * 100); // Convert to cents
 
       lineItems.push({
         price_data: {
@@ -427,22 +510,40 @@ const createCheckoutSession = async (req, res) => {
           },
           unit_amount: unitAmount,
         },
-        quantity: (item.quantity || 1) * (item.rentalDays || 1),
+        quantity: (item.quantity || 1) * rentalDays,
       });
     }
+
+    console.log('Creating Stripe session with line items:', lineItems.length);
+    console.log('Metadata:', { cartItems: `${cartItems.length} items`, userId: req.user.userId });
+
+    const finalSuccessUrl = successUrl
+      ? successUrl.includes('{CHECKOUT_SESSION_ID}')
+        ? successUrl
+        : `${successUrl}${successUrl.includes('?') ? '&' : '?'}session_id={CHECKOUT_SESSION_ID}`
+      : 'http://localhost:3000/success?session_id={CHECKOUT_SESSION_ID}'
 
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
       line_items: lineItems,
       mode: 'payment',
-      success_url:
-        successUrl || 'http://localhost:3000/success?session_id={CHECKOUT_SESSION_ID}',
+      success_url: finalSuccessUrl,
       cancel_url: cancelUrl || 'http://localhost:3000/cart',
       metadata: {
         cartItems: JSON.stringify(cartItems),
-        userId: req.user?.userId || 'guest',
+        userId: req.user.userId,
       },
     });
+
+    console.log('✅ Session created:', session.id);
+
+    if (!session || !session.url || !session.id) {
+      console.error('Invalid session response:', session);
+      return res.status(500).json({
+        success: false,
+        message: 'Invalid response from payment provider',
+      });
+    }
 
     res.json({
       success: true,
@@ -450,7 +551,20 @@ const createCheckoutSession = async (req, res) => {
       url: session.url,
     });
   } catch (error) {
-    console.error('Checkout session error:', error);
+    console.error('❌ Checkout session error:');
+    console.error('  Type:', error.type);
+    console.error('  Message:', error.message);
+    console.error('  Param:', error.param);
+    console.error('  Full error:', error);
+
+    // Return specific error messages based on error type
+    if (error.type === 'StripeInvalidRequestError') {
+      return res.status(400).json({
+        success: false,
+        message: `Invalid request: ${error.message}`,
+      });
+    }
+
     res.status(500).json({
       success: false,
       message: error.message || 'Failed to create checkout session',
@@ -480,16 +594,38 @@ const verifyCheckout = async (req, res) => {
     }
 
     // Retrieve session from Stripe
+    console.log(`Verifying Stripe session: ${sessionId}`);
     const session = await stripe.checkout.sessions.retrieve(sessionId);
+
+    console.log('Session payment status:', session.payment_status);
+    console.log('Session metadata:', session.metadata);
 
     if (session.payment_status !== 'paid') {
       return res.status(400).json({
         success: false,
-        message: 'Payment not completed',
+        message: `Payment status: ${session.payment_status}. Please complete the payment.`,
       });
     }
 
-    const cartItems = JSON.parse(session.metadata.cartItems);
+    if (!session.metadata || !session.metadata.cartItems || !session.metadata.userId) {
+      console.error('Missing metadata in session');
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid session data. Please try the payment again.',
+      });
+    }
+
+    let cartItems;
+    try {
+      cartItems = JSON.parse(session.metadata.cartItems);
+    } catch (err) {
+      console.error('Failed to parse cart items:', err);
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid cart data in session',
+      });
+    }
+
     const db = getDB();
     const bookings = [];
 
@@ -500,27 +636,61 @@ const verifyCheckout = async (req, res) => {
 
       if (!vehicle) continue;
 
+      // Validate vehicle price data
+      const pricePerDay = parseFloat(vehicle.pricePerDay);
+      if (!pricePerDay || isNaN(pricePerDay) || pricePerDay <= 0) {
+        console.error(`Invalid price for vehicle ${item.vehicleId}: ${vehicle.pricePerDay}`);
+        continue; // Skip items with invalid pricing
+      }
+
+      // Recalculate rental days to ensure consistency
+      const dateValidation = validateBookingDates(item.startDate, item.endDate);
+      if (!dateValidation.valid) {
+        console.error(`Invalid dates for booking: ${dateValidation.message}`);
+        continue; // Skip invalid items
+      }
+
+      const rentalDays = dateValidation.rentalDays;
+      const totalCost = Math.round(pricePerDay * rentalDays * (item.quantity || 1) * 100) / 100;
+
       const booking = {
-        userId: session.metadata.userId !== 'guest' ? new ObjectId(session.metadata.userId) : null,
+        userId: new ObjectId(session.metadata.userId),
         vehicleId: new ObjectId(item.vehicleId),
         vehicleName: vehicle.name,
         vehicleCategory: vehicle.category,
-        rentalDays: item.rentalDays || 1,
+        startDate: new Date(item.startDate),
+        endDate: new Date(item.endDate),
+        rentalDays,
         quantity: item.quantity || 1,
-        pricePerDay: vehicle.pricePerDay,
-        totalCost: vehicle.pricePerDay * (item.rentalDays || 1) * (item.quantity || 1),
+        pickupLocation: item.pickupLocation || '',
+        dropoffLocation: item.dropoffLocation || '',
+        pricePerDay: pricePerDay,
+        totalCost,
+        discount: 0,
         status: 'confirmed',
         paymentStatus: 'paid',
         paymentMethod: 'stripe',
         paymentId: session.payment_intent,
         sessionId: session.id,
+        notes: item.notes || '',
         createdAt: new Date(),
         updatedAt: new Date(),
       };
 
       const result = await db.collection('bookings').insertOne(booking);
+
+      // Increment vehicle booking count
+      await db
+        .collection('vehicles')
+        .updateOne(
+          { _id: new ObjectId(item.vehicleId) },
+          { $inc: { bookingCount: 1 } }
+        );
+
       bookings.push({ id: result.insertedId, ...booking });
     }
+
+    console.log(`✅ Bookings created: ${bookings.length}`);
 
     res.json({
       success: true,
@@ -528,7 +698,7 @@ const verifyCheckout = async (req, res) => {
       bookings,
     });
   } catch (error) {
-    console.error('Checkout verification error:', error);
+    console.error('❌ Verify checkout error:', error.message);
     res.status(500).json({
       success: false,
       message: error.message || 'Failed to verify checkout',
@@ -539,6 +709,7 @@ const verifyCheckout = async (req, res) => {
 module.exports = {
   createBooking,
   getUserBookings,
+  getAllBookings,
   getBookingById,
   updateBookingStatus,
   cancelBooking,

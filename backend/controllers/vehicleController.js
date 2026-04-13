@@ -2,10 +2,7 @@ const { getDB } = require('../config/db');
 const { ObjectId } = require('mongodb');
 const { validateVehicleData, validatePrice, sanitizeInput } = require('../middleware/validators');
 
-/**
- * Get all vehicles with pagination
- * Query params: page (default 1), limit (default 10), category, search
- */
+
 const getAllVehicles = async (req, res) => {
   try {
     const db = getDB();
@@ -13,11 +10,16 @@ const getAllVehicles = async (req, res) => {
     const limit = Math.min(50, parseInt(req.query.limit) || 10); // Max 50 per page
     const skip = (page - 1) * limit;
 
-    let query = { isApproved: true };
+    let query = {
+      $or: [
+        { isApproved: true },
+        { isApproved: { $exists: false } }
+      ]
+    };
 
     // Filter by category
     if (req.query.category) {
-      query.category = sanitizeInput(req.query.category);
+      query.category = sanitizeInput(req.query.category).toLowerCase();
     }
 
     // Text search by name
@@ -155,7 +157,7 @@ const createVehicle = async (req, res) => {
       reviewCount: 0,
       availability: true,
       features: Array.isArray(features) ? features.map(sanitizeInput) : [],
-      isApproved: false, // Requires admin approval
+      isApproved: true,
       createdBy: new ObjectId(req.user.userId),
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -289,7 +291,12 @@ const deleteVehicle = async (req, res) => {
 const searchVehicles = async (req, res) => {
   try {
     const db = getDB();
-    let query = { isApproved: true };
+    let query = {
+      $or: [
+        { isApproved: true },
+        { isApproved: { $exists: false } }
+      ]
+    };
 
     // Category filter
     if (req.query.category) {

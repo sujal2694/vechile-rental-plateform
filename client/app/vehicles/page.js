@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import Navbar from '../components/Navbar'
 import Footer from '../components/Footer'
 import AddToCartModal from '../components/AddToCartModal'
@@ -8,13 +8,13 @@ import { vehicleService } from '../lib/apiService'
 const backendBaseUrl = process.env.NEXT_PUBLIC_API_URL?.replace(/\/api$/, '') || 'http://localhost:5000'
 
 const Vehicles = () => {
-  const [selectedCategory, setSelectedCategory] = React.useState('All')
+  const [selectedCategory, setSelectedCategory] = useState('All')
   const [vehicles, setVehicles] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [selectedVehicle, setSelectedVehicle] = useState(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
-  const categories = ['All', 'Economy', 'Compact', 'SUV', 'Van', 'Premium', 'Luxury']
+  const categories = ['All', 'Economy', 'Compact', 'SUV', 'Premium', 'Luxury']
 
   useEffect(() => {
     fetchVehicles()
@@ -39,7 +39,7 @@ const Vehicles = () => {
 
   const filteredVehicles = selectedCategory === 'All' 
     ? vehicles 
-    : vehicles.filter(v => v.category === selectedCategory)
+    : vehicles.filter(v => v.category?.toLowerCase() === selectedCategory.toLowerCase())
 
   const handleBookNow = (vehicle) => {
     setSelectedVehicle(vehicle)

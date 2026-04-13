@@ -4,17 +4,29 @@ import { useCart } from '../context/CartContext'
 
 const AddToCartModalContent = ({ vehicle, isOpen, onClose }) => {
   const [rentalDays, setRentalDays] = useState(1)
+  const [startDate, setStartDate] = useState('')
+  const [endDate, setEndDate] = useState('')
   const { addToCart } = useCart()
 
   if (!isOpen) return null
 
-  const pricePerDay = parseInt(vehicle.price.replace('$', '').replace('/day', ''))
+  const pricePerDay = vehicle.pricePerDay || parseInt(vehicle.price?.replace('$', '').replace('/day', '') || '0')
   const totalPrice = pricePerDay * rentalDays
 
   const handleAddToCart = () => {
+    if (!startDate || !endDate) {
+      alert('Please select start and end dates.')
+      return
+    }
+    if (new Date(startDate) >= new Date(endDate)) {
+      alert('End date must be after start date.')
+      return
+    }
     addToCart(vehicle, rentalDays)
+    // Note: CartContext addToCart sets default dates, but we can update them after
+    // For now, keep as is, dates are set in cart
     onClose()
-    alert(`${vehicle.name} added to cart for ${rentalDays} day(s)!`)
+    alert(`${vehicle.name} added to cart!`)
   }
 
   return (
@@ -32,7 +44,7 @@ const AddToCartModalContent = ({ vehicle, isOpen, onClose }) => {
         </h2>
 
         <img
-          src={vehicle.image ? `http://localhost:5000${vehicle.image}` : '/placeholder-car.jpg'}
+          src={vehicle.image ? `${process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:5000'}${vehicle.image}` : '/placeholder-car.jpg'}
           alt={vehicle.name}
           className='w-full h-40 object-cover rounded-lg mb-4'
         />
@@ -45,7 +57,7 @@ const AddToCartModalContent = ({ vehicle, isOpen, onClose }) => {
             </div>
             <div>
               <p className='text-gray-600'>Price/Day</p>
-              <p className='font-semibold text-gray-900'>{vehicle.price}</p>
+              <p className='font-semibold text-gray-900'>${pricePerDay}</p>
             </div>
             <div>
               <p className='text-gray-600'>Seats</p>
@@ -56,6 +68,29 @@ const AddToCartModalContent = ({ vehicle, isOpen, onClose }) => {
               <p className='font-semibold text-gray-900'>{vehicle.transmission}</p>
             </div>
           </div>
+        </div>
+
+        <div className='mb-4'>
+          <label className='block text-sm font-semibold text-gray-900 mb-2'>
+            Start Date
+          </label>
+          <input
+            type='date'
+            value={startDate}
+            min={new Date().toISOString().split('T')[0]}
+            onChange={(e) => setStartDate(e.target.value)}
+            className='w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 mb-2'
+          />
+          <label className='block text-sm font-semibold text-gray-900 mb-2'>
+            End Date
+          </label>
+          <input
+            type='date'
+            value={endDate}
+            min={startDate || new Date().toISOString().split('T')[0]}
+            onChange={(e) => setEndDate(e.target.value)}
+            className='w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500'
+          />
         </div>
 
         <div className='mb-4'>

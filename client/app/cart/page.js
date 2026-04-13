@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import Navbar from '../components/Navbar'
@@ -7,7 +7,19 @@ import Footer from '../components/Footer'
 import { useCart } from '../context/CartContext'
 
 const Cart = () => {
-  const { cartItems, removeFromCart, updateQuantity, updateRentalDays, getCartTotal, clearCart } = useCart()
+  const { 
+    cartItems, 
+    removeFromCart, 
+    updateQuantity, 
+    updateRentalDays, 
+    updateStartDate,
+    updateEndDate,
+    updatePickupLocation,
+    updateDropoffLocation,
+    updateNotes,
+    getCartTotal, 
+    clearCart 
+  } = useCart()
 
   const total = getCartTotal()
   const subtotal = total
@@ -47,8 +59,7 @@ const Cart = () => {
                   {/* Cart Items List */}
                   <div className='divide-y divide-gray-200'>
                     {cartItems.map((item, index) => {
-                      const pricePerDay = parseInt(item.price.replace('$', '').replace('/day', ''))
-                      const itemTotal = pricePerDay * item.rentalDays * item.quantity
+                      const itemTotal = item.pricePerDay * item.rentalDays * item.quantity
 
                       return (
                         <div key={item.id || item._id || index} className='p-4 md:p-6 hover:bg-gray-50 transition-colors'>
@@ -56,7 +67,7 @@ const Cart = () => {
                             {/* Vehicle Image */}
                             <div className='col-span-1'>
                               <Image
-                                src={`http://localhost:5000${item.image}`}
+                                src={`${process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:5000'}${item.image}`}
                                 alt={item.name}
                                 width={400}
                                 height={128}
@@ -86,23 +97,76 @@ const Cart = () => {
                                 </div>
                               </div>
 
-                              {/* Rental Days Input */}
-                              <div className='flex items-center gap-2 mb-4'>
-                                <label className='text-sm font-semibold text-gray-700'>Rental Days:</label>
-                                <input
-                                  type='number'
-                                  min='1'
-                                  value={item.rentalDays}
-                                  onChange={(e) => updateRentalDays(item.id, parseInt(e.target.value) || 1)}
-                                  className='w-16 px-2 py-1 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-orange-500'
+                              {/* Date Inputs */}
+                              <div className='grid grid-cols-2 gap-2 mb-4'>
+                                <div>
+                                  <label className='block text-xs font-semibold text-gray-700 mb-1'>Start Date</label>
+                                  <input
+                                    type='date'
+                                    value={item.startDate}
+                                    min={new Date().toISOString().split('T')[0]}
+                                    onChange={(e) => updateStartDate(item.id, e.target.value)}
+                                    className='w-full px-2 py-1 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm'
+                                  />
+                                </div>
+                                <div>
+                                  <label className='block text-xs font-semibold text-gray-700 mb-1'>End Date</label>
+                                  <input
+                                    type='date'
+                                    value={item.endDate}
+                                    min={item.startDate}
+                                    onChange={(e) => updateEndDate(item.id, e.target.value)}
+                                    className='w-full px-2 py-1 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm'
+                                  />
+                                </div>
+                              </div>
+
+                              {/* Location Inputs */}
+                              <div className='grid grid-cols-2 gap-2 mb-4'>
+                                <div>
+                                  <label className='block text-xs font-semibold text-gray-700 mb-1'>Pickup Location</label>
+                                  <input
+                                    type='text'
+                                    value={item.pickupLocation}
+                                    onChange={(e) => updatePickupLocation(item.id, e.target.value)}
+                                    placeholder='Enter pickup location'
+                                    className='w-full px-2 py-1 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm'
+                                  />
+                                </div>
+                                <div>
+                                  <label className='block text-xs font-semibold text-gray-700 mb-1'>Dropoff Location</label>
+                                  <input
+                                    type='text'
+                                    value={item.dropoffLocation}
+                                    onChange={(e) => updateDropoffLocation(item.id, e.target.value)}
+                                    placeholder='Enter dropoff location'
+                                    className='w-full px-2 py-1 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm'
+                                  />
+                                </div>
+                              </div>
+
+                              {/* Notes */}
+                              <div className='mb-4'>
+                                <label className='block text-xs font-semibold text-gray-700 mb-1'>Notes</label>
+                                <textarea
+                                  value={item.notes}
+                                  onChange={(e) => updateNotes(item.id, e.target.value)}
+                                  placeholder='Any special requests or notes'
+                                  rows='2'
+                                  className='w-full px-2 py-1 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm'
                                 />
+                              </div>
+
+                              {/* Rental Days Display */}
+                              <div className='flex items-center gap-2 mb-4'>
+                                <span className='text-sm font-semibold text-gray-700'>Rental Days: {item.rentalDays}</span>
                               </div>
                             </div>
 
                             {/* Price and Actions */}
                             <div className='col-span-1 flex flex-col items-end justify-between'>
                               <div className='text-right mb-4'>
-                                <p className='text-sm text-gray-600'>{item.price}</p>
+                                <p className='text-sm text-gray-600'>${item.pricePerDay}/day</p>
                                 <p className='text-sm text-gray-600'>× {item.rentalDays} days</p>
                                 <p className='text-xl font-bold text-orange-500'>${itemTotal}</p>
                               </div>
