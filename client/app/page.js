@@ -7,18 +7,21 @@ import Testimonials from "./components/Testimonials";
 import FAQ from "./components/FAQ";
 import CTA from "./components/CTA";
 import Footer from "./components/Footer";
+import { CartProvider } from "./context/CartContext";
 
 export default function Home() {
   return (
     <>
-      <Navbar />
-      <Header />
-      <FeaturedVehicles />
-      <Features />
-      <Testimonials />
-      <FAQ />
-      <CTA />
-      <Footer />
+      <CartProvider>
+        <Navbar />
+        <Header />
+        <FeaturedVehicles />
+        <Features />
+        <Testimonials />
+        <FAQ />
+        <CTA />
+        <Footer />
+      </CartProvider>
     </>
   );
 }

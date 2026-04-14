@@ -212,47 +212,43 @@ export const vehicleService = {
 export const bookingService = {
   getAllBookings: async () => {
     try {
-      const token = localStorage.getItem('adminToken')
-      const response = await fetch(`${API_BASE_URL}/bookings/all`, {
+      const token = adminAuthService.getToken();
+
+      const res = await fetch(`${API_URL}/bookings`, {
+        method: "GET",
         headers: {
-          'Authorization': `Bearer ${token}`,
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`, // ✅ REQUIRED
         },
-      })
-      const data = await response.json()
-      if (!response.ok) {
-        return { success: false, message: data.message || 'Failed to fetch bookings', data: [] }
-      }
-      return { success: true, data: data.bookings || data }
-    } catch (error) {
-      console.error('Error fetching bookings:', error)
-      return { success: false, message: 'An error occurred', data: [] }
+      });
+
+      const data = await res.json();
+      return data;
+    } catch (err) {
+      console.error(err);
+      return { success: false };
     }
   },
 
-  updateBookingStatus: async (bookingId, status) => {
+  updateBookingStatus: async (id, status) => {
     try {
-      const token = localStorage.getItem('adminToken')
-      const response = await fetch(`${API_BASE_URL}/bookings/${bookingId}/status`, {
-        method: 'PUT',
+      const token = adminAuthService.getToken();
+
+      const res = await fetch(`${API_URL}/bookings/${id}`, {
+        method: "PUT",
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`, // ✅ REQUIRED
         },
         body: JSON.stringify({ status }),
-      })
-      const data = await response.json()
+      });
 
-      if (!response.ok) {
-        return { success: false, message: data.message || 'Failed to update booking' }
-      }
-
-      return { success: true, message: 'Booking updated successfully', data }
-    } catch (error) {
-      console.error('Update booking error:', error)
-      return { success: false, message: 'An error occurred' }
+      return await res.json();
+    } catch (err) {
+      return { success: false };
     }
   },
-}
+};
 
 // Contact Service (for admin)
 export const contactService = {
