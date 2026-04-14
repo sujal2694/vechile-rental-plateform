@@ -1,5 +1,7 @@
+"use client";
 import { Outfit, Ovo } from "next/font/google";
 import "./globals.css";
+import { CartProvider } from "./context/CartContext";
 
 const outfit = Outfit({
   variable: "--font-outfit",
@@ -13,11 +15,6 @@ const ovo = Ovo({
   weight: ["400"],
 });
 
-export const metadata = {
-  title: "Motive Ride - Car Rental Service",
-  description: "Rent your dream car with ease and confidence.",
-};
-
 export default function RootLayout({ children }) {
   return (
     <html lang="en" className={`${outfit.variable} ${ovo.variable}`}>
@@ -25,7 +22,9 @@ export default function RootLayout({ children }) {
         <link href="https://cdn.boxicons.com/3.0.8/fonts/basic/boxicons.min.css" rel="stylesheet"></link>
       </head>
       <body className="font-outfit">
+        <CartProvider>
           {children}
+        </CartProvider>
       </body>
     </html>
   );

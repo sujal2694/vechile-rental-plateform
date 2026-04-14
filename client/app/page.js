@@ -7,12 +7,10 @@ import Testimonials from "./components/Testimonials";
 import FAQ from "./components/FAQ";
 import CTA from "./components/CTA";
 import Footer from "./components/Footer";
-import { CartProvider } from "./context/CartContext";
 
 export default function Home() {
   return (
     <>
-      <CartProvider>
         <Navbar />
         <Header />
         <FeaturedVehicles />
@@ -21,7 +19,6 @@ export default function Home() {
         <FAQ />
         <CTA />
         <Footer />
-      </CartProvider>
     </>
   );
 }
